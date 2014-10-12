@@ -25,3 +25,110 @@ fn <- function(x){
 
 summaries <- llply(file_names, fn)
 names(summaries) <- file_names
+
+
+summaries
+
+# 
+# > summaries
+# 
+# $asfrRR.txt
+# $asfrRR.txt$desc
+# [1] "Period fertility rates by calendar year and age (Lexis squares, age in completed years (ACY))"
+# 
+# $asfrRR.txt$vars
+# [1] "Code Year    Age        ASFR"
+# 
+# 
+# $birthsRR.txt
+# $birthsRR.txt$desc
+# [1] "Live births by calendar year and age (Lexis squares, age in completed years (ACY))"
+# 
+# $birthsRR.txt$vars
+# [1] "Code Year    Age        Total"
+# 
+# 
+# 
+# $cpfrRR.txt
+# $cpfrRR.txt$desc
+# [1] "Cumulative period fertility rates (Lexis squares)"
+# 
+# $cpfrRR.txt$vars
+# [1] "Code Year    Age     CPFR"
+# 
+# 
+# 
+# $exposRR.txt
+# $exposRR.txt$desc
+# [1] "Female population exposure by calendar year and age (Lexis squares, age in completed years (ACY))"
+# 
+# $exposRR.txt$vars
+# [1] "Code Year    Age        Exposure"
+
+
+
+data_asfr <- read.table(
+  file="data/hfd/Files/zip_w/asfrRR.txt",
+  header=T,
+  skip=2
+  )
+
+names(data_asfr) <- tolower(names(data_asfr))
+data_asfr$age <- revalue(data_asfr$age, replace=c("12-" = "12", "55+" = "55"))
+data_asfr$age <- as.numeric(as.character(data_asfr$age))
+
+
+####
+
+data_births <- read.table(
+  file="data/hfd/Files/zip_w/birthsRR.txt",
+  header=T,
+  skip=2
+)
+
+names(data_births) <- tolower(names(data_births))
+data_births$age <- revalue(data_births$age, replace=c("12-" = "12", "55+" = "55"))
+data_asfr$age <- as.numeric(as.character(data_asfr$age))
+
+####
+
+data_cpfr <- read.table(
+  file="data/hfd/Files/zip_w/cpfrRR.txt",
+  header=T,
+  skip=2
+)
+
+names(data_cpfr) <- tolower(names(data_cpfr))
+
+####
+
+data_expos <- read.table(
+  file="data/hfd/Files/zip_w/exposRR.txt",
+  header=T,
+  skip=2
+)
+
+names(data_expos) <- tolower(names(data_expos))
+
+data_combined <- join(
+  x=data_asfr,
+  y=data_births
+  ) 
+
+data_combined <- join(
+  x=data_combined,
+  y=data_cpfr
+) 
+
+data_combined <- join(
+  x=data_combined,
+  y=data_expos
+) 
+
+
+data_combined <- mutate(data_combined, birth_rate=total/exposure)
+
+write.csv(
+  data_combined,
+  file="data/tidy/lexis_square_combined.csv"
+  )
