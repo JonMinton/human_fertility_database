@@ -1,5 +1,10 @@
 rm(list=ls())
 
+
+### To do : 
+# Combine with female population size estimates from hmd
+
+
 source("scripts/LoadPackages.R")
 
 RequiredPackages(
