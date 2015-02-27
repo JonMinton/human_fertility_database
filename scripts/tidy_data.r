@@ -1,254 +1,309 @@
-# the aim of this file is to understand more about the data files 
-# from the HFD and to arrange it in a 'tidy' format 
 
-# This can be done in an automated way by noting that the 
-# first line of each file contains a description
-# and the third line contains the variable names
+# HFD ---------------------------------------------------------------------
 
+# Merging datasets in the Human Fertility Database using tidy data 
+# and split-apply-combine paradigms in R. 
+
+
+# Introduction
+# Like the Human Mortality Database (HMD), the Human Fertility Database (HFD) offers the 
+# option to download all available data as a zipped file. Unzippiing this file 
+# produces a complex directory structure containing a large number of files. Most, but not all
+# of these files contain the fertility data, but all of the files containing data also contain
+# some metadata, such as a description of the variables and date the data were produced. Additionaly
+# some of the files include variables that can be meaningfully combined with other variables in other 
+# files, whereas other files do not. 
+
+# The benefits of identifying and combining variables from different datasets are that they allow 
+# more complex analyses and comparisons between groups, in particular countries, to be performed 
+# more easily. However, combining files manually can be a time consuming task.
+
+# This paper presents R code that automates the merging of particular variables from many files to 
+# a single dataset. The first section will discuss the simpler case of combining XX, YY and ZZ 
+# into a single file from the HFD. Then, we will look at 
+# the more structurally complex example of extracting and merging data from 
+# the HMD.
+
+# To help perform the merging tasks necessary, the  paper will make use of the 
+# plyr and dplyr packages produced by Hadley Wickham, which implement the 
+# Split-Apply-Combine paradigm discussed in XXXX. To help decide on the desired
+# output structure for the merged data, we will take on board the suggestions 
+# made by Wickham about 'Tidy Data' formats, the benefits of having data in 
+# such a format, and the data management and processing challenges involved 
+# in getting data into such a format. 
+
+# In all cases it is assumed that the base directory of the R session contains a 
+# directory called `data`, and that this directory contains [further details here].
+
+# Description of HFD and HMD data structures 
+
+# The Human Fertility Database
+# The bulk download option from the HFD downloads a zipped file which has the following 
+# file structure:
+## Illustration here
+
+# The directory has been moved into the subdirectory data/raw_data/hfd within our R 
+# directory. 
+
+# The Human Mortality Database
+# The bulk download option from the HMD downloads a much larger file [DETAILS], which 
+# when unzipped reveals a much more complex directory and file structure. 
+# Each country's data are stored in a separate subdirectory, labelled with the 
+# country code of that country. Within each country directory, the data files
+# tend to have the same name, and so both the directory name and the file 
+# name are needed in order to distinguish between datasets. Not all directories 
+# contain exactly the same files, and the range of years reported in each 
+# year vary. 
+
+
+
+# Exploring and processing the HFD 
+
+# We the session by removing any pre-existing objects from the R workspace
+# and then loading a number of R packages that make the process of data 
+# tidying and batch processing easier. If these packages are not already installed
+# use install.packages([PACKAGE_NAME]) in order to do so. 
 rm(list=ls())
+
 require(tidyr)
 require(stringr)
 require(plyr)
 require(dplyr)
 
+# With the HFD files loaded in the specified directory, we can extract a 
+# list of the files that it contains as follows
 
 file_names <- list.files(
   "data/raw_data/hfd/Files/zip_w/"
   )
 
+# By opening up a small selection of these data files, we can see that they
+# follow a consistent format. The first two lines of each file contain 
+# metadata, with the first line containing a description of the dataset
+# and the second line stating when the file was last modified. The third line
+# contains the header names, and the data itself begins at line four. 
+
+# Knowing this file structure, we can construct a simple function that will 
+# extract this metadata from each file by reading the first few lines:
 
 fn <- function(x){
   inputs <- readLines(
-    paste("data/hfd/Files/zip_w", x, sep="/"),
+    paste("data/raw_data/hfd/Files/zip_w", x, sep="/"),
     n=3
     )
     
-  return(list(
-    
-    desc=inputs[1],
-    vars=inputs[3]
-    ))
-}
-
-summaries <- llply(file_names, fn)
-names(summaries) <- file_names
-
-
-summaries
-
-# I'm interested in the tables that are reported by Lexis square. 
-file_index <- sapply(summaries, function(x){str_detect(x$desc, "Lexis square")})
-files_to_use <- names(summaries[file_index])
-
-
-# Now to load together these files
-
-
-
-fn <- function(x){
-  this_file_loc <- paste("data/raw_data/hfd/Files/zip_w", x, sep="/")
-  
-  this_dta <- read.table(
-    file=this_file_loc,
-    header=T,
-    skip=2,
-    na.strings="."
+  out <- data.frame(
+    file_name=x, 
+    description=inputs[1],
+    variables=inputs[3]
     )
-  
-  this_dta$Age <- str_replace_all(this_dta$Age, "+-", "")
-  this_dta$Age <- as.numeric(as.character(this_dta$Age))
-  return(this_dta)
+  return(out)
 }
 
-list_lex_sq <- llply(files_to_use, fn, .progress="text")
-# NOTE: This doesn't seem to work properly - NAs evident later
+# This function fn is applied for each of the files in file_names using 
+# the plyr function ldply. ldply expects a list as an input and returns 
+# a dataframe as an output. Its input, file_names, is therefore coerced 
+# into a list, before each element of the list, i.e. each separate file 
+#name, is passed to fn. The output from each call to fn is then passed back
+# and then combined back into a list. 
+summaries <- ldply(file_names, fn)
+
+# By displaying summaries we can now see, for each file, the description
+# of the data provided in the variable, and a list of the variables 
+# that file contains
+head(summaries)
+
+
+# We can also use the contents of summaries in order to identify particular
+# subsets of the data. For example, the files that contain the phrase 
+# 'Lexis Square' within their description can be identified as follows:
+summaries$file_name[str_detect(summaries$description, "Lexis square")]
+
+# Similarly, the files that contain the variable 'TFR' (but 
+# not TFR0, TFR1 and so on), can be identified as follows:
+
+summaries$file_name[
+  str_detect(summaries$variables, " TFR ")
+    ]
+
+##
+
+# In this example, we will look to combine a small selection of files
+# asfrRR : period fertility rates by calendar year and age (Lexis squares)
+# birthsRR : Live births by calendar year and age (Lexis squares)
+# cpfr: Cumulative period fertility rates (Lexis squares)
+# exposRR : Female population exposure by calendar year and age (Lexis squares)
+
+# These variables were selected because they are meaningful to combine, as each 
+# variable is reported as a Lexis square, and disaggregated by Code (country), 
+# age and year. Because just a small number of variables are to be combined, the 
+# process of loading and joining the data will be done manually rather than within 
+# a function. However if there were more variables to combine then use of 
+# plyr to automate the process would be recommended. 
+
+
+data_asfr <- read.table(
+  file="data/raw_data/hfd/Files/zip_w/asfrRR.txt",
+  header=T,
+  skip=2,
+  na.strings="."
+)
+
+# For typing convenience, it is useful to convert all variable names to 
+# lowercase. 
+names(data_asfr) <- tolower(names(data_asfr))
+
+# To see the class that each variable has been converted to, we can use the 
+# apply function to apply class to each column. 
+
+apply(data_asfr, 2, class)
+
+# This shows that Year, Age, and ASFR are stored as character variables, although
+# they are numeric. 
+# In the case of year and asfr, it is not problematic to change the class 
+# using as.numeric. However as Age contains "12-" to represent 12 or under, 
+# and "55+" to represent 55 or older, these non-numeric characters need to be 
+# removed in order for the type conversion to be successful. A more explicit way
+# of removing these characters would be with the revalue function within plyr
 
 
 
-# list_lex_sq is now a list object, one element for each table that has been read in. 
-# To be converted to a tidy data format, the values from columns 4 onwards need to be matched to 
-# Code, Year, and Age. One (inefficient but comprehensible) way of doing this is as follows:
+age_1 <- revalue(data_asfr$age, replace=c("12-" = "12", "55+" = "55"))
+age_1 <- as.numeric(as.character(age_1))
 
-df_lex_sq <- list_lex_sq[[1]] 
+# An alternative approach would be to use stringr's str_replace function
+age_2 <- str_replace(data_asfr$age, "[+]|[-]", "")
+age_2 <- as.numeric(as.character(age_2))
 
-for (i in 2:length(dta_lex_sq)){
-  this_df <- list_lex_sq[[i]]
-  df_lex_sq <- df_lex_sq   %>% left_join(this_df, by=c("Code", "Year", "Age"))
-}
+all.equal(data_asfr$age_1, data_asfr$age_2)
 
-# When working with dataframes it is often easier to use the dplyr package. This package is similar to
-# plyr but optimised for dataframes. It also has a slightly different syntactic convention: it encourages 
-# the use of the 'pipe' operator %>% from the magrittr package, which makes it much easier to chain operations
-# from left to right, making code much easier to understand. Additionally, almost all functions are named as verbs
-# which clearly and simply describe the operation performed on the data. 
-
-# To start, convert the dataframe to dplyr's tbl_df class.
-df_lex_sq <- df_lex_sq %>%
-  tbl_df
-
-# The code above uses the pipe operator. The above is directly equivalent to tbl_df(df_lex_sq). Although 
-# the benefits of writing code using a pipe are marginal in this case, when multiple operations are 
-# chained the benefits to readability become very large. 
-
-# One benefit of tbl_df object is that the head() function is no longer necessary. Typing df_lex_sq shows 
-# only the first few rows, along with the dimensions of the dataframe and additional metadata
-df_lex_sq
-
-# We can see that some of the files contain the same variables: ASFR, Total, and CPFR. 
-# Because they share the same name in the merged dataset '.x' and '.y' have been appended to them.
-# We expect that no observation will have both (say) ASFR.x and ASFR.y, and so if one of the columns 
-# has a value then the other does not. We can check this out as follows
-
-df_lex_sq %>%
-  mutate(asfr_check = is.na(ASFR.x) | is.na(ASFR.y)) %>%
-  select(asfr_check) %>%
-  as.vector %>%
-  table
+data_asfr$age <- age_1
+rm(age_1, age_2)
 
 
-# This shows that my assumption was not correct. A number of the rows contain 
-# values in both columns. The next aim should therefore be to see if the values in both rows are identical
+# We can now do the same with the other files
 
-df_lex_sq %>%
-  mutate(asfr_check = is.na(ASFR.x) | is.na(ASFR.y)) %>%
-  filter(asfr_check ==FALSE) %>%
-  select(ASFR.x, ASFR.y) %>%
-  mutate(asfr_identical = ASFR.x==ASFR.y) %>%
-  select(asfr_identical) %>%
-  as.vector %>%
-  table
+data_births <- read.table(
+    file="data/raw_data/hfd/Files/zip_w/birthsRR.txt",
+    header=T,
+    skip=2
+)
 
-# In this case all rows evaluate as true, meaning we can collapse both columns to a single column
+names(data_births) <- tolower(names(data_births))
+data_births$age <- revalue(data_births$age, replace=c("12-" = "12", "55+" = "55"))
+data_births$age <- as.numeric(as.character(data_births$age))
 
-# Now to evaluate total and cpfr.y in the same way
+data_cpfr <- read.table(
+  file="data/raw_data/hfd/Files/zip_w/cpfrRR.txt",
+  header=T,
+  skip=2
+)
 
-df_lex_sq %>%
-  mutate(total_check = is.na(Total.x) | is.na(Total.y)) %>%
-  filter(total_check == FALSE) %>%
-  select(Total.x, Total.y) %>%
-  mutate(total_identical = Total.x == Total.y) %>%
-  select(total_identical) %>%
-  as.vector %>%
-  table
-
-df_lex_sq %>%
-  mutate(cpfr_check = is.na(CPFR.x) | is.na(CPFR.y)) %>%
-  filter(cpfr_check == FALSE) %>%
-  select(CPFR.x, CPFR.y) %>%
-  mutate(cpfr_identical = CPFR.x == CPFR.y) %>%
-  select(cpfr_identical) %>%
-  as.vector %>%
-  table
+names(data_cpfr) <- tolower(names(data_cpfr))
 
 
+data_expos <- read.table(
+  file="data/raw_data/hfd/Files/zip_w/exposRR.txt",
+  header=T,
+  skip=2
+)
 
-# We can now create a single variable for ASFR, CPFR and Total, and then remove the duplicated variables
+names(data_expos) <- tolower(names(data_expos))
 
-df_lex_sq <- df_lex_sq %>%
-  mutate(
-    ASFR = ifelse(is.na(ASFR.y), ASFR.x, ASFR.y),
-    CPFR = ifelse(is.na(CPFR.y), CPFR.x, CPFR.y),
-    Total = ifelse(is.na(Total.y), Total.x, Total.y)
-  ) %>%
-  select(-ASFR.x, -ASFR.y, -CPFR.x, -CPFR.y, -Total.x, -Total.y) 
+# If they have consistently labelled common fields then an arbitrarily
+# large number of dataframe objects can be joined together using 
+# the join function within plyr and the Reduce function in base R. 
 
-# We can check that each combination of Code, Year and Age in each row is unique using the distinct function.
-
-df_lex_sq %>%
-  select(Code, Year, Age) %>%
-  distinct %>%
-  nrow
-  
-# There are 80124 rows, meaning no duplications. 
-
-
-# We can now save this this combined dataset for later. 
-
-write.csv(df_lex_sq, "data/derived_data/hfd_lexis_squares.csv", row.names=F)
+data_combined <- Reduce(
+  join,
+  list(
+    data_asfr, 
+    data_births, 
+    data_cpfr,
+    data_expos
+  )
+)
 
 
+# The convenience function 'mutate' can be used to add new columns 
+# to the combined data that depends on the row-wise values of other 
+#columns. For example, to add a row calculating the crude birth rate
+#for every year, country and age combination simply write:
+data_combined <- mutate(data_combined, birth_rate=total/exposure)
+
+# With the data in this format we can now save the file for later use
+
+write.csv(
+  data_combined,
+  file="data/tidy/hfd/lexis_square_combined.csv",
+  row.names=F  
+)
 
 
 # HMD ---------------------------------------------------------------------
 
-# We will now look at doing something similar using the HMD
+# A more complex example of automated extraction and merging involves 
+# extracting population counts and death counts from the HMD. The HMD 
+# has a more complex directory structure as well as far more files. 
+# In this section we will show how data from multiple directories 
+# can be recombined from around a hundred separate files, and labelled
+# according to tidy data conventions using country code labels extracted
+# from the directory names rather than the contents of the files themselves
 
-# The HMD is structurally more complex, as well as being longer. To start it will be good to remove existing 
-# objects in the workspace to free up memory. 
+# We begin again by removing existing objects from the R workspace, as well
+# as explicitly calling the garbage collection routine in order to make 
+# sure enough memory has been freed for the operations that follow. Then, 
+# we load the requisite libraries
 rm(list=ls())
 gc()
 
+require(tidyr)
+require(stringr)
+require(plyr)
+require(dplyr)
+
+#The additional library above is dplyr, which is similar to plyr but focused 
+# on dataframes. dplyr uses the pipe operator %>% borrowed from the maggritr 
+# package. The %>% operator allowed a series of commands to be chained, meaning
+# that a series of commands can be written from left to right, rather than 
+# inside to outside. This greatly improves the readability of code 
+# and so makes code easier to write, maintain and check. For more information 
+# about the dplyr package see XXXX. 
+
+# Both plyr and dplyr can be used at the same time, with plyr better for 
+# batch processing operations involving reading from and writing to files. 
+# However they use a number of the same function names, and so it is 
+# recommended that, if using dplyr as well as plyr, dplyr is loaded after 
+# plyr so that the more recent dplyr variants of functions mask older plyr
+# variants of these functions. 
 
 
-# Now to identify the directories named by country
 
-list_country_dirs <- list.dirs("data/raw_data/hmd", recursive=F, full.names=FALSE)
-
-
-# Similarly, we can extract metadata from each of the datafiles in the STATS subdirectory. To start with, we 
-# will just look at the first country directory, AUS
-
-fn <- function(x){
-  
-  files_in_stats <- list.files(
-    paste0("data/raw_data/hmd/", x, "/STATS/"),
-    pattern="\\.txt$"
-    )
-  fn_inner <- function(xx){
-    first_three_lines <- readLines(
-      paste0("data/raw_data/hmd/", x, "/STATS/", xx),
-      n=3
-      )
-    out <- list(
-      desc=first_three_lines[1],
-      vars=first_three_lines[3]
-    )
-    return(out)
-  }
-  output <- llply(files_in_stats, fn_inner)
-  names(output) <- files_in_stats
-  return(output)
-}
-
-complex_list <- llply(list_country_dirs, fn)
-names(complex_list) <- list_country_dirs
-
-#to convert to a matrix, showing the presence or absence of variables by year
-
-countries <- list_country_dirs
-vars <- sapply(complex_list, names)
-
-unique_vars <- vars[[1]]
-
-for (i in 2:length(vars)){
-  unique_vars <<- c(unique_vars, vars[[i]]) %>%
-    unique  
-}
-
-fn <- function(x){
-  out <- unique_vars %in% names(x)
-  return(out)
-}
-
-country_var_matrix <- laply(complex_list, fn)
-dimnames(country_var_matrix) <- list(names(complex_list), unique_vars)
-
-# To work out how many countries contain each variable
-adply(country_var_matrix, 2, function(x) table(x)[["TRUE"]])
-
-
-# For now, the variables of interest include
-#  Population.txt 46
-#Deaths_1x1.txt 46
-
-image(country_var_matrix)
-
-
-# The aim in this example is just to extract and merge the populations.txt and deaths_1x1.txt files from 
-# each directory, as well as to label the contents appropriately.
+# With the data in the form specified previously, we can produce a list of all
+# subdirectories containing data from individual countries using the list.dirs
+# command. As we want to use this later to label the data by country as well 
+# as age, year and sex, we set full.names to FALSE, and as we do not 
+# want any directories within the directories we also set recursive to false
 
 list_country_dirs <- list.dirs("data/raw_data/hmd", recursive=F, full.names=FALSE)
 
+# This list can now be used as the main input into a function that, for each country
+# directory, loads the contents of the files Population.txt and Deaths_1x1.txt within
+# each directory, rearranges the data into a tidy data format, merges the data in the 
+# new format together with a country code identifier, before passing this merged 
+# dataframe as the output. The function below also uses some functions from the tidyr 
+# package to reshape the data. 
+
+
+# An additional complication with data in the HMD is that population sizes are 
+# reported twice for countries in years in which the country's territory changed
+# In these years, the suffice - is used to denote the population size estimates 
+# before the change, and + is used to denote the population sizes estimates after 
+# the changes. In order to allow this variable to be converted to a numeric format
+# a single population count will be calculated using the average of the two popuation 
+# sizes. This will then allow the data to be merged to death count, which are 
+# reported for the complete year in all cases. The function below will do this along with 
+# other batch processing operations. 
 
 fn <- function(x){
   this_country_name <- x
@@ -261,6 +316,26 @@ fn <- function(x){
     gather(key="Sex", value="population_count", Female, Male, Total) %>%
     mutate(Country=this_country_name) %>%
     select(Country, Year, Age, Sex, population_count)
+    
+  # condition if any of the Year values end with a - or a + symbol
+  pop_plus_minus <- this_populations$Year  %>% str_detect("[+-]$")
+  if (any(pop_plus_minus)){
+    pop_pm <- this_populations[pop_plus_minus,]
+    pop_other <- this_populations[!pop_plus_minus,]
+    pop_other$Year <- as.numeric(pop_other$Year)
+    pop_other$population_count <- as.numeric(pop_other$population_count)
+    pop_pm$Year <- pop_pm$Year %>%
+      str_replace("[+-]", "") %>%
+      as.numeric
+    pop_pm$population_count <- as.numeric(pop_pm$population_count) 
+    pop_pm <- pop_pm %>%
+      group_by(Country, Year, Age, Sex) %>%
+      summarise(
+        population_count=mean(population_count)
+      ) # average of the two
+    this_populations <- bind_rows(pop_pm, pop_other) %>%
+      arrange(Country, Year, Age, Sex)
+  }
   
   this_deaths <- read.table(
     paste0(this_basedir, "/Deaths_1x1.txt"),
@@ -270,22 +345,64 @@ fn <- function(x){
     mutate(Country=this_country_name) %>%
     select(Country, Year, Age, Sex, death_count)
   
+  this_deaths$death_count <- this_deaths$death_count %>% as.numeric
+  
   output <- this_populations %>%
     plyr::join(this_deaths, type="full")
   
   return(output)
 }
 
+# The :: function is the scope operator. This allows us to specify  which 
+# package a function should be sought within. In this case we want to 
+# make sure R uses the join function from plyr rather than any identically
+# named join function within dplyr
+
+# To iteratively repeatedly call fn above for each country directory, we 
+# can use the ldply function in R. To see a progress report we can add 
+# the argument .progress="text". This is useful for larger batch operations.
+
 pop_death_combined <- ldply(list_country_dirs, fn, .progress="text")
 
+head(pop_death_combined)
 
-# Something else that needs to be done is to change '110+' to '110' in order to be 
-#able to convert to numeric
+# As before, for typing convenience we can change the variable 
+# names and contents of country to lowercase 
 
-pop_death_combined$Age <- pop_death_combined$Age %>%
+names(pop_death_combined) <- tolower(names(pop_death_combined))
+
+# For illustration, the country codes and sexes can be turned into lowercase
+# using the pipe operator as follows:
+
+pop_death_combined$country <- pop_death_combined$country %>% tolower
+pop_death_combined$sex <- pop_death_combined$sex %>% tolower
+  
+# As with ages in the HFD, some of the age values in the age 
+# field are not strictly numeric, with 110+ rather than 110. 
+# To allow this to be transformed into a numeric vector 
+# without creating NAs we can do the following:
+
+pop_death_combined$age <- pop_death_combined$age %>%
   mapvalues(from="110+", to="110") %>%
   as.character %>%
   as.numeric
-# This can now be written out as a csv file
 
-write.csv(pop_death_combined, file="data/derived_data/hmd_lexis_squares.csv", row.names=F)
+# The data have now been combined from 92 separate files, located
+# in 46 separate directories, and formatted in a consistent, tidy data 
+# format. The resulting dataset can now be saved as a comma-separated value
+# file for analysis.
+
+write.csv(pop_death_combined, file="data/tidy/hmd/lexis_square_combined.csv", row.names=F)
+
+
+
+# Discussion 
+
+# This technical document has illustrated how R packages like plyr, tidyr and 
+# dplyr can help with batch data processing operations, extracting relevant data 
+# located in multiple files in multiple locations and joining them into a single 
+# file. With data in the format produced a number of additional analyses become 
+# much more straightforward. A later technical document will illustrate how the 
+# data produced in this technical document can be used to batch generate a large
+# number of data visualisations, as well as other bespoke analyses.
+
