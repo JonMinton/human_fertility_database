@@ -20,18 +20,27 @@ require(lattice)
 require(ggplot2)
 
 
-hfd_data <- read.csv("data/derived_data/hfd_lexis_squares.csv")
-hmd_data <- read.csv("data/derived_data/hmd_lexis_squares.csv")
+hfd_data <- read.csv("data/derived_data/hfd_lexis_squares.csv") %>%
+  tbl_df
+hmd_data <- read.csv("data/derived_data/hmd_lexis_squares.csv") %>%
+  tbl_df
+
+hmd_data$Age <- hmd_data$Age %>%
+  mapvalues(from="110+", to="110") %>%
+  as.character %>%
+  as.numeric
+# HMD -
+# change Age to numeric
 
 
+
+# produce 
 
 # An effective command for the batch production of images and other files is the 
 # d_ply command. This expects a dataframe as an input and returns no output. 
 # (From the perspective of R, files are generated as 'side effects' of R operations, and are not 
 # considered outputs as they do not create new objects within the workspace.)
 
-hfd_data <- hfd_data %>%
-  tbl_df
 
 # period fertility rates
 

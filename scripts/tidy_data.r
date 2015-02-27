@@ -61,6 +61,9 @@ fn <- function(x){
 }
 
 list_lex_sq <- llply(files_to_use, fn, .progress="text")
+# NOTE: This doesn't seem to work properly - NAs evident later
+
+
 
 # list_lex_sq is now a list object, one element for each table that has been read in. 
 # To be converted to a tidy data format, the values from columns 4 onwards need to be matched to 
@@ -275,6 +278,14 @@ fn <- function(x){
 
 pop_death_combined <- ldply(list_country_dirs, fn, .progress="text")
 
+
+# Something else that needs to be done is to change '110+' to '110' in order to be 
+#able to convert to numeric
+
+pop_death_combined$Age <- pop_death_combined$Age %>%
+  mapvalues(from="110+", to="110") %>%
+  as.character %>%
+  as.numeric
 # This can now be written out as a csv file
 
 write.csv(pop_death_combined, file="data/derived_data/hmd_lexis_squares.csv", row.names=F)
