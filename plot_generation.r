@@ -94,3 +94,61 @@ data_hfd %>%
 data_hmd %>%
   group_by(country) %>%
   summarise(min_year=min(year), max_year=max(year)) 
+
+
+# We can produce derived variables very easily using the mutate function in dplyr
+
+data_hfd <- data_hfd %>%
+  mutate(birth_rate=total/exposure)
+
+data_hmd <- data_hmd %>%
+  mutate(death_rate=death_count/population_count)
+
+
+# It is also quite straightforward to combine the data dataframes as they use common 
+# variable names. For example, we could work out the ratio of the birth rate to 
+# the death rate as follows
+
+data_hfd %>%
+  inner_join(data_hmd) %>%
+  mutate(rr=(death_count/population_count)/(total/exposure)) %>%
+  select(country, year, age, rr)
+
+# The exposure and population count values are different. We can explore the size 
+# of these differences as follows:
+
+data_hfd %>%
+  inner_join(data_hmd) %>%
+  mutate(dif=exposure - population_count, prop_dif=dif/population_count) %>%
+  select(country, age, year, exposure, population_count, dif, prop_dif) %>%
+  arrange(prop_dif)
+
+data_hfd %>%
+  inner_join(data_hmd) %>%
+  mutate(dif=exposure - population_count, prop_dif=dif/population_count) %>%
+  select(country, age, year, exposure, population_count, dif, prop_dif) %>%
+  arrange(desc(prop_dif))
+
+
+# There are two things to note in the above examples. Firstly the variable prop_dif 
+# depends on the variable dif, which was created in the previous line. 
+# Secondly, arrange(prop_dif) arranges the rows from lowest to highest value of prop_desc;
+# enclosing prop_dif in desc instead sorts the rows from highest to lowest. 
+
+
+# Data reshaping is also quite straightforward. To calculate the male to female
+# population ratio, for example, we can use the spread command from the tidyr package
+
+data_hmd %>%
+  select(country, year, age, sex, population_count) %>%
+  spread(sex, population_count) %>%
+  mutate(sex_ratio= female/male) %>%
+  select(country, year, age, sex_ratio)
+
+
+
+# Bathtub curves 
+
+# We can plot the relationship between mortality ratio and age over time for a range of 
+# countries using ggplot2. 
+

@@ -225,11 +225,6 @@ data_combined <- Reduce(
 )
 
 
-# The convenience function 'mutate' can be used to add new columns 
-# to the combined data that depends on the row-wise values of other 
-#columns. For example, to add a row calculating the crude birth rate
-#for every year, country and age combination simply write:
-data_combined <- mutate(data_combined, birth_rate=total/exposure)
 
 # With the data in this format we can now save the file for later use
 
