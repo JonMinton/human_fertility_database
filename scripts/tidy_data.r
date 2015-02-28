@@ -302,6 +302,7 @@ list_country_dirs <- list.dirs("data/raw_data/hmd", recursive=F, full.names=FALS
 # the changes. In order to allow this variable to be converted to a numeric format
 # a single population count will be calculated using the average of the two popuation 
 # sizes. This will then allow the data to be merged to death count, which are 
+
 # reported for the complete year in all cases. The function below will do this along with 
 # other batch processing operations. 
 
@@ -311,44 +312,36 @@ fn <- function(x){
   
   this_populations <- read.table(
     paste0(this_basedir, "/Population.txt"),
-    skip=2, header=TRUE
-    )   %>%
-    gather(key="Sex", value="population_count", Female, Male, Total) %>%
+    skip=2, header=TRUE, stringsAsFactors=FALSE, na.strings="."
+    ) %>% 
+    gather(key="Sex", value="population_count", Female, Male, Total, convert=TRUE) %>%
+    filter(!is.na(population_count)) %>%
     mutate(Country=this_country_name) %>%
     select(Country, Year, Age, Sex, population_count)
-    
+  
+  this_populations$population_count <- as.numeric(as.character(this_populations$population_count))
+  if(any(is.na(this_populations$population_count))) browser()
   # condition if any of the Year values end with a - or a + symbol
-  pop_plus_minus <- this_populations$Year  %>% str_detect("[+-]$")
-  if (any(pop_plus_minus)){
-    pop_pm <- this_populations[pop_plus_minus,]
-    pop_other <- this_populations[!pop_plus_minus,]
-    pop_other$Year <- as.numeric(pop_other$Year)
-    pop_other$population_count <- as.numeric(pop_other$population_count)
-    pop_pm$Year <- pop_pm$Year %>%
-      str_replace("[+-]", "") %>%
-      as.numeric
-    pop_pm$population_count <- as.numeric(pop_pm$population_count) 
-    pop_pm <- pop_pm %>%
+  pop_plus_minus <- this_populations$Year  %>% as.character  %>% str_detect("[+-]$")
+  if (any(pop_plus_minus)){ 
+    this_populations$Year <- this_populations$Year  %>%  str_replace("[+-]", "")  %>% as.numeric    
+    this_populations <- this_populations %>%
       group_by(Country, Year, Age, Sex) %>%
       summarise(
-        population_count=mean(population_count)
+        population_count=mean(population_count, na.rm=T)
       ) # average of the two
-    this_populations <- bind_rows(pop_pm, pop_other) %>%
-      arrange(Country, Year, Age, Sex)
   }
-  
   this_deaths <- read.table(
     paste0(this_basedir, "/Deaths_1x1.txt"),
-    skip=2, header=TRUE
-  ) %>%
-    gather(key="Sex", value="death_count", Female, Male, Total) %>%
+    skip=2, header=TRUE, stringsAsFactors=FALSE, na.strings="."
+  ) %>% 
+    gather(key="Sex", value="death_count", Female, Male, Total, convert=TRUE) %>%
+    filter(!is.na(death_count)) %>%
     mutate(Country=this_country_name) %>%
     select(Country, Year, Age, Sex, death_count)
-  
-  this_deaths$death_count <- this_deaths$death_count %>% as.numeric
-  
+    
   output <- this_populations %>%
-    plyr::join(this_deaths, type="full")
+    inner_join(this_deaths)
   
   return(output)
 }
@@ -364,7 +357,6 @@ fn <- function(x){
 
 pop_death_combined <- ldply(list_country_dirs, fn, .progress="text")
 
-head(pop_death_combined)
 
 # As before, for typing convenience we can change the variable 
 # names and contents of country to lowercase 
