@@ -218,6 +218,8 @@ fn <- function(x){
     spread(key=age, value=asfr) 
   
   years <- mtrx$year
+  min_year <- min(years)
+  max_year <- max(years)
   
   mtrx$year <- NULL
   
@@ -230,7 +232,7 @@ fn <- function(x){
     y=as.numeric(colnames(mtrx)),
     z=mtrx,
   
-    filename=paste0("stl/hfd/", this_country, "_asfr.stl"),
+    filename=paste0("stl/hfd/", this_country, "_(", min_year, "_", max_year, ")_asfr.stl"),
     z.expand=T,
     show.persp=F
   )
