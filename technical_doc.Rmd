@@ -27,7 +27,7 @@ of effort required to perform such comparative analyses can be much reduced.
 
 The first part of this technical report will describe how to use two functions that I have developed, in R, in order to automatically merge a large number of files from the HFD, and HMD respectively, into just two datafiles, which can be then saved as plain text files, ready to use for further analyses. The second part of this technical report presents a motivating example, showing the benefits of having such data in a smaller number of files, by showing how the process of producing shaded contour plots (SCPs) for each of the countries and variables included can then be automated, meaning that potentially hundreds of different analyses can be produced and updated very quickly. 
 
-Both the functions for data gathering presented in the first half of the technical report, and the image production example in the second half of the technical report, make expensive use of the 'plyr' package, and the associated 'split-apply-combine' paradigm. Readers are encouraged to learn more about the plyr package, and the related dplyr package, and to explore the contents of the functions used here, in order to understand how they work, and how the functions and approach described here can be applied to a much wider range of data management and analyses tasks in demographic analyses. However even if the functions are thought of as 'black boxes' and their contents are not explored, it is hoped that the outputs they produce will be valuable to researchers in cutting down the amount of time they need to spend on data management tasks rather than substantive analyses. 
+Both the functions for data gathering presented in the first half of the technical report, and the functions which generate images as presented in the second half of the technical report, make extensive use of the 'plyr' package, and the associated 'split-apply-combine' paradigm. Readers are encouraged to learn more about the plyr package, and the related dplyr package, and to explore the contents of the functions used here, in order to understand how they work, and how the functions and approach described here can be applied to a much wider range of data management and analyses tasks in demographic analyses. However even if the functions are thought of as 'black boxes' and their contents are not explored, it is hoped that the outputs they produce will be valuable to researchers in cutting down the amount of time they need to spend on data management tasks rather than substantive analyses. 
 
 # Preparation
 
@@ -42,8 +42,8 @@ Hadley Wickham defines a dataset as 'tidy' if:
 
 Each row within a 'tidy data' format table contains two types of variable:
 
-1. Variables defining the location of the observation
-2. Variables defining the value of the observation.
+1. 'Where' variables, defining the 'location' of the observation; and 
+2. 'What' Variables, defining the value measured at the 'location'.
 
 In the case of the demographic data of interest in this exercise, 'location' variables include:
 
@@ -60,7 +60,7 @@ Each row therefore begins with the three (HFD) or four (HMD) location variables,
 
 With data arranged this format, it becomes easier to derive additional variables, to compare between groups, and to automate the production of outputs for each country separately. 
 
-Note it is important that 'location' variables are compatible. In the case of demographic data, is is particularly important to ensure that the years and ages to be combined all refer to either lexis squares, or lexis triangles, or lexis parallograms, and not to an inconsistent mixture of these. [REFS] Combining data in this way would be incorrect, and analogous within demography of using different coordinate reference systems within geographical information systems (GIS). 
+Note it is important that 'location' variables are compatible. In the case of demographic data, is is particularly important to ensure that the years and ages to be combined all refer to either Lexis squares, or Lexis triangles, or Lexis parallograms, and not to an inconsistent mixture of these. [REFS] Combining data in this way would be incorrect, and analogous within demography of using different coordinate reference systems within geographical information systems (GIS). 
 
 The functions presented here will all make use of variables aggregated to Lexis squares using calender time in years. [CLARIFICATIONS] However similar functions could be written to fetch other forms of compatible data. 
 
@@ -70,7 +70,6 @@ The functions presented here will all make use of variables aggregated to Lexis 
 - Within the table 'Data by type', look for the link to the data type 'All types of HFD' data. Click on this link to begin the download.
 
 The size of the HFD file is around 25Mb.  Once unzipped, this increases to around 144Mb. 
-
 
 
 ##Accessing all available data from the HMD
@@ -103,6 +102,8 @@ The STATS directory then contains 55 data files in comma-separated value (CSV) f
 
 ## Data preparation
 
+A zipped file is available alongside this technical report. This contains a subset of the data available from the HFD and HMD bulk download options, as described above. The functions described here will work using this subset of files, but in order to make best use of the functions I recommend that the full datasets are downloaded to the appropriate locations as detailed below. 
+
 This tutorial assumes that:
 - the two zipped files above have been downloaded and unzipped
 - the HFD file has been unzipped into a directory called hfd
@@ -116,8 +117,12 @@ base_dir
 -- raw_data
 --- hfd
 --- hmd
--- merged_data
+-- derived_data
 - scripts
+- figures
+-- asfr
+-- population
+-- log_mortality
 
 The zipped file associated with this technical report contains a small number of files arranged in the 
 structure above. In the case of the HFD it contains only the specific files that will be merged. 
