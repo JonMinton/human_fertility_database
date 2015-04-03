@@ -3,68 +3,35 @@ title: Merging, exploring, and batch processing data from the Human Fertility Da
   and Human Mortality Database
 author: "Dr Jon Minton"
 date: "Sunday, February 22, 2015"
-output: html_document
+output: word_document
 ---
 #Introduction
 
-This briefing paper will demonstrate how to use the R package `plyr` to merge all available data from the Human Mortality Database (HMD) and Human Fertility Database (HFD) into single datasets that follow a 'tidy data' format. With the data arranged in this format it then becomes easier to make comparisons between genders and groupings, and to automate the production of figures and other analyses for a large number of permutations of groups. 
+As well as picking and choosing particular countries and variables to download from the Human Fertality
+Database (HFD) and the Human Mortality Database (HMD), it is also possible to initiate a bulk 
+download of all data from either database. In both cases, the user is presented with a compressed 
+file in .zip format, containing a number of separate variables in a large number of separate files.
+In the case of the Human Mortality Database, the same variable is contained in separate files
+in separate directories for each of the countries for which the variable have been collected. 
+Although, when interested in a single country's records, it can be relatively straightforward to 
+identify which file, from which directory, the appropriate data should be loaded from, 
+some analyses would require accessing a large number of files, and so the amount of effort 
+required to manage the data in these cases would be much increased. For example, if a researcher 
+wants to combine population and death counts from a number of countries, and further form this
+to see how a variable differs in one country compared with a number of others, then the number of 
+separate files that would need to be accessed could be very large. 
 
+If, instead, relevant data from a number of separate countries, and for a number of separate 
+variables of interest, were available, in a consistent format, within a single file, then the amount 
+of effort required to perform such comparative analyses can be much reduced. 
 
-##Accessing all available data from the HFD
-- Go to humanfertility.org and select login from the Registration section of the column on the left of the page. 
-- Once logged in, select 'Zipped Data Files' under the 'DATA' section of the column on the left of the page.
-- Within the table 'Data by type', look for the link to the data type 'All types of HFD' data. Click on this link to begin the download.
+The first part of this technical report will describe how to use two functions that I have developed, in R, in order to automatically merge a large number of files from the HFD, and HMD respectively, into just two datafiles, which can be then saved as plain text files, ready to use for further analyses. The second part of this technical report presents a motivating example, showing the benefits of having such data in a smaller number of files, by showing how the process of producing shaded contour plots (SCPs) for each of the countries and variables included can then be automated, meaning that potentially hundreds of different analyses can be produced and updated very quickly. 
 
-The size of the HFD file is around 25Mb.  Once unzipped, this increases to around 144Mb. 
+Both the functions for data gathering presented in the first half of the technical report, and the image production example in the second half of the technical report, make expensive use of the 'plyr' package, and the associated 'split-apply-combine' paradigm. Readers are encouraged to learn more about the plyr package, and the related dplyr package, and to explore the contents of the functions used here, in order to understand how they work, and how the functions and approach described here can be applied to a much wider range of data management and analyses tasks in demographic analyses. However even if the functions are thought of as 'black boxes' and their contents are not explored, it is hoped that the outputs they produce will be valuable to researchers in cutting down the amount of time they need to spend on data management tasks rather than substantive analyses. 
 
+# Preparation
 
-
-##Accessing all available data from the HMD
-- Go to mortality.org and log in.
-- Select 'Zipped Data Files'; scroll to the bottom of the page and click on the link in the table 'All countries for the HMD'. 
-
-- Once logged in, select 'Zipped Data Files' under the 'DATA' section of the column on the left of the page.
-- Within the table 'Data by type', look for the link to the data type 'All types of HFD' data. Click on this link to begin the download.
-
-The size of the HMD file is around 311 Mb. Once unzipped, this increases to around 1.24 Gb. 
-
-## Data preparation
-
-This tutorial assumes that:
-- the two zipped files above have been downloaded and unzipped
-- the HFD file has been unzipped into a directory called hfd
-- the HMD file has been unzipped into a directory called hmd
-- that both the hfd and hmd directories are within a directory called raw_data
-
-The directory structure assumed is:
-
-base_dir
-- data
--- raw_data
---- hfd
---- hmd
-
-
-## Structure of hfd directory
-
-The HFD has a relatively straightforward directory structure: within 'hfd' is a directory called 'Files', and within this directory is a directory called 'zip_w'. A total of 56 files are in this directory, and there are no additional directories.
-
-## Structure of the hmd directory
-
-The hmd directory has a more complex, branched structure. Once unzipped, the directory opens to 46 separate folders, each labelled with the country code of the country whose data they contain. Each of these country folders then has the same internal directory structure. As an example here is the directory structure of the first country by code, AUS:
-
-- AUS
--- CHECKS
--- DOCS
--- InputDB
--- LexisDB
--- STATS
-
-The STATS directory then contains 55 data files in comma-separated value (CSV) format. Within this technical document, the aim will be to extract data from the files `Deaths_1x1.txt` and `Populations.txt` from each of these subdirectories, but the methods described can be generalised to other operations.
-
-# Data Management Concepts
-
-## Tidy Data
+## Tidy Data Principles
 
 Hadley Wickham defines a dataset as 'tidy' if:
 1. Each variable forms a column.
@@ -91,205 +58,136 @@ Each row therefore begins with the three (HFD) or four (HMD) location variables,
 2. Population counts.
 3. Births
 
-
 With data arranged this format, it becomes easier to derive additional variables, to compare between groups, and to automate the production of outputs for each country separately. 
 
+Note it is important that 'location' variables are compatible. In the case of demographic data, is is particularly important to ensure that the years and ages to be combined all refer to either lexis squares, or lexis triangles, or lexis parallograms, and not to an inconsistent mixture of these. [REFS] Combining data in this way would be incorrect, and analogous within demography of using different coordinate reference systems within geographical information systems (GIS). 
 
-# Getting data from the HFD into 'tidy data' format
+The functions presented here will all make use of variables aggregated to Lexis squares using calender time in years. [CLARIFICATIONS] However similar functions could be written to fetch other forms of compatible data. 
 
+##Accessing all available data from the HFD
+- Go to humanfertility.org and select login from the Registration section of the column on the left of the page. 
+- Once logged in, select 'Zipped Data Files' under the 'DATA' section of the column on the left of the page.
+- Within the table 'Data by type', look for the link to the data type 'All types of HFD' data. Click on this link to begin the download.
 
-We begin by producing a list of all files in the relevant directory.
-
-```{r}
-file_names <- list.files(
-  "data/raw_data/hfd/Files/zip_w/"
-  )
-```
-
-A quick exploration of a few of the files in this directory shows that they are in a consistent format. The first line provides a description of the variable and the second line shows when the file was last modified. These first two lines are therefore 'metadata'.
-
-The third line comprises the variable names (column names) for each variable in the dataset, each separated by at least one space, followed by a return character. The associated values for each variable then begins from the fourth line onwards. 
-
-Knowing this we can therefore write a simple function which extracts, for each file, the description and also the variable names.
-
-```{r}
-fn <- function(x){
-  inputs <- readLines(
-    paste("data/hfd/Files/zip_w", x, sep="/"),
-    n=3
-    )
-    
-  return(list(    
-    desc=inputs[1], # The first line
-    vars=inputs[3]  # The third line
-    ))
-}
-```
-
-We can use `plyr`'s llply function to then apply this function to all files in the directory. 
-
-```{r}
-summaries <- llply(file_names, fn)
-names(summaries) <- file_names
-```
-
-This summary object is a list object. To display it we simply type its name into the console: `summaries`. The first few rows of the output are displayed below.
-
-```{r}
-summaries
-```
-
-We can search for the files that contain tables with `Code`, `Year` and `Age` as variables, as these could then be combined.
-
-```{r}
-
-require(tidyr)
-fn <- function(x, what){  
-  vars_in_file <- str_split(x$vars, "[ ]{1,}")[[1]] # Split when at least
-  # one space has been identified.
-  check_against <- what
-  out <- check_against %in% vars_in_file # which of the variables to be checked for
-  # are in the file
-  out <- all(out) # are all of the variables in the file?
-  return(out)
-}
-
-cya_files <- sapply(summaries, fn, what=c("Code", "Year", "Age")) 
-
-cya_files
-```
-
-cya_files can then be used to subset 
-
-With this information, the following tables were identified as all including the same three location variables `Code`, `Year`, and `Age`:
--`asfrRR`
--`birthsRR`
--`cpfrRR`
-- `exposRR`
-
-Because they have the same location variables they can be combined within a single table. 
-# 
-# > summaries
-# 
-# $asfrRR.txt
-# $asfrRR.txt$desc
-# [1] "Period fertility rates by calendar year and age (Lexis squares, age in completed years (ACY))"
-# 
-# $asfrRR.txt$vars
-# [1] "Code Year    Age        ASFR"
-# 
-# 
-# $birthsRR.txt
-# $birthsRR.txt$desc
-# [1] "Live births by calendar year and age (Lexis squares, age in completed years (ACY))"
-# 
-# $birthsRR.txt$vars
-# [1] "Code Year    Age        Total"
-# 
-# 
-# 
-# $cpfrRR.txt
-# $cpfrRR.txt$desc
-# [1] "Cumulative period fertility rates (Lexis squares)"
-# 
-# $cpfrRR.txt$vars
-# [1] "Code Year    Age     CPFR"
-# 
-# 
-# 
-# $exposRR.txt
-# $exposRR.txt$desc
-# [1] "Female population exposure by calendar year and age (Lexis squares, age in completed years (ACY))"
-# 
-# $exposRR.txt$vars
-# [1] "Code Year    Age        Exposure"
+The size of the HFD file is around 25Mb.  Once unzipped, this increases to around 144Mb. 
 
 
 
-data_asfr <- read.table(
-  file="data/hfd/Files/zip_w/asfrRR.txt",
-  header=T,
-  skip=2
-  )
+##Accessing all available data from the HMD
+- Go to mortality.org and log in.
+- Select 'Zipped Data Files'; scroll to the bottom of the page and click on the link in the table 'All countries for the HMD'. 
 
-names(data_asfr) <- tolower(names(data_asfr))
-data_asfr$age <- revalue(data_asfr$age, replace=c("12-" = "12", "55+" = "55"))
-data_asfr$age <- as.numeric(as.character(data_asfr$age))
+- Once logged in, select 'Zipped Data Files' under the 'DATA' section of the column on the left of the page.
+- Within the table 'Data by type', look for the link to the data type 'All types of HFD' data. Click on this link to begin the download.
 
-
-####
-
-data_births <- read.table(
-  file="data/hfd/Files/zip_w/birthsRR.txt",
-  header=T,
-  skip=2
-)
-
-names(data_births) <- tolower(names(data_births))
-data_births$age <- revalue(data_births$age, replace=c("12-" = "12", "55+" = "55"))
-data_asfr$age <- as.numeric(as.character(data_asfr$age))
-
-####
-
-data_cpfr <- read.table(
-  file="data/hfd/Files/zip_w/cpfrRR.txt",
-  header=T,
-  skip=2
-)
-
-names(data_cpfr) <- tolower(names(data_cpfr))
-
-####
-
-data_expos <- read.table(
-  file="data/hfd/Files/zip_w/exposRR.txt",
-  header=T,
-  skip=2
-)
-
-names(data_expos) <- tolower(names(data_expos))
-
-data_combined <- join(
-  x=data_asfr,
-  y=data_births
-  ) 
-
-data_combined <- join(
-  x=data_combined,
-  y=data_cpfr
-) 
-
-data_combined <- join(
-  x=data_combined,
-  y=data_expos
-) 
-
-
-data_combined <- mutate(data_combined, birth_rate=total/exposure)
-
-write.csv(
-  data_combined,
-  file="data/tidy/lexis_square_combined.csv"
-  )
-  
-  
+The size of the HMD file is around 311 Mb. Once unzipped, this increases to around 1.24 Gb. 
 
 
 
+## Structure of hfd directory
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring H
-TML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+The HFD has a relatively straightforward directory structure: within 'hfd' is a directory called 'Files', and within this directory is a directory called 'zip_w'. A total of 56 files are in this directory, and there are no additional directories.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+## Structure of the hmd directory
+
+The hmd directory has a more complex, branched structure. Once unzipped, the directory opens to 46 separate folders, each labelled with the country code of the country whose data they contain. Each of these country folders then has the same internal directory structure. As an example here is the directory structure of the first country by code, AUS:
+
+- AUS
+-- CHECKS
+-- DOCS
+-- InputDB
+-- LexisDB
+-- STATS
+
+The STATS directory then contains 55 data files in comma-separated value (CSV) format. Within this technical document, the aim will be to extract data from the files `Deaths_1x1.txt` and `Populations.txt` from each of these subdirectories, but the methods described can be generalised to other operations.
+
+## Data preparation
+
+This tutorial assumes that:
+- the two zipped files above have been downloaded and unzipped
+- the HFD file has been unzipped into a directory called hfd
+- the HMD file has been unzipped into a directory called hmd
+- that both the hfd and hmd directories are within a directory called raw_data
+
+The directory structure assumed is:
+
+base_dir
+- data
+-- raw_data
+--- hfd
+--- hmd
+-- merged_data
+- scripts
+
+The zipped file associated with this technical report contains a small number of files arranged in the 
+structure above. In the case of the HFD it contains only the specific files that will be merged. 
+In the case of the HMD example it contains only three countries/populations, rather than the more than 
+thirty such countries/populations that the full HMD download contains. The functions described will work
+in the same way with the reduced example datasets as with the full datasets. In the case of the HFD function it will know to ignore the additional files that are contained in the full download; and in the case of the HMD it will know to search for all subdirectories likely to contain additional country 
+populations. Users are encouraged to try first with the zipped example file included with this technical report, then confirm that, when the full data are downloaded and arranged in the same format, the 
+function will work as well. 
+
+## Loading the functions 
+
+The functions are contained in a script file, within the scripts directory above, called 'functions'. The location of the working directory within an R session can be found using 
 
 ```{r}
-summary(cars)
+getwd()
+
 ```
 
-You can also embed plots, for example:
+This can be run within an R session, with base_dir as the working directory, by using the source command
 
-```{r, echo=FALSE}
-plot(cars)
+```{r}
+source("scripts/functions.R")
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+In order to check that the functions have been loaded correctly, we can check for all objects in the 
+R workspace using 'ls()', or the functions only using 'ls.str()'. If the functions have been loaded 
+correctly then either call should show the following functions to be within the R workspace
+
+merge_lexis_square_hfd
+merge_lexis_square_hmd
+generate_scp_pop
+generate_scp_mort
+generate_scp_asfr
+
+The two functions beginning with merge_ will merge and combine the data from the HFD and and HMD respectively, and so will be the focus of part one of this technical report. The three functions beginning with 'generate' will be used to produce SCPs using the data as arranged by the merge_ functions; they will be the focus of part two of this technical report. 
+
+# Part one: merging and combining data from many files
+
+## The 'merge_lexis_square_hfd' function
+
+With the HFD data downloaded, unzipped, and in the location specificed above, we can use the merge_lexis_square_hfd function by specifying the location of the HFD directory as its first argument, named 'loc'. 
+
+```{r}
+hfd_tidy <- merge_lexis_square_hfd(loc="data/raw_data/hfd/")
+```
+
+The function takes extracts the following variables from separate HFD data: ASFR, pop....
+
+
+We can look at the first few rows of the data using the head command. 
+
+```{r}
+head(hfd_tidy)
+```
+
+We can also change how the hfd_tidy data is presented to us within R by using the tbl_df() function from the 'dplyr' package. After doing this, we can see the first few observations, as well as other information about the object such as its size, just by typing the object name
+
+```{r}
+hfd_tidy <- tbl_df(hfd_tidy)
+hfd_tidy
+```
+
+## The 'merge_lexis_square_hmd' function
+
+Although it is a more complex function internally, the merge_lexis_square_hmd function can be used in exactly the same way as the merge_lexis_square_hfd function, by passing the location of the correct 
+directory to the function as its first argument, called 'loc'
+
+```{r}
+hmd_tidy <- merge_lexis_square_hmd(loc="data/raw_data/hmd/")
+```
+
+
