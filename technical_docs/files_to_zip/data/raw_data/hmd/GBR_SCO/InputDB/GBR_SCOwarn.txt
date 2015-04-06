@@ -1,0 +1,4 @@
+WARNING:  The data given here represent only the civilian population.  During the periods between pre-war and post-war censuses (1912-20 and 1939-50), population estimates exclude the military while death counts exclude military deaths that occurred abroad. This series also includes cohort life tables, but we caution the user that they are of questionable value for cohorts that experienced significant military losses during war. The quality of the data for 1855-1875 are lower than in later years and should be used with caution. For details, please see the Background and Documentation file.
+
+
+

@@ -1,109 +1,100 @@
-# Merging datasets in the Human Fertility Database using tidy data 
-# and split-apply-combine paradigms in R. 
+# Dr Jon Minton
+# University of Glasgow
+# 5/4/2015
+
+# Script file with examples for merging and batch processing of 
+# data from the HFD and HMD
 
 
-# Introduction
-# Like the Human Mortality Database (HMD), the Human Fertility Database (HFD) offers the 
-# option to download all available data as a zipped file. Unzippiing this file 
-# produces a complex directory structure containing a large number of files. Most, but not all
-# of these files contain the fertility data, but all of the files containing data also contain
-# some metadata, such as a description of the variables and date the data were produced. Additionaly
-# some of the files include variables that can be meaningfully combined with other variables in other 
-# files, whereas other files do not. 
+# Pre-requisites
 
-# The benefits of identifying and combining variables from different datasets are that they allow 
-# more complex analyses and comparisons between groups, in particular countries, to be performed 
-# more easily. However, combining files manually can be a time consuming task.
+# To start with, please ensure the working directory of the R session is the 
+# base directory of the zipped file you have downloaded, after this 
+# zipped file has been unzipped. Once unzipped, the base dir should contain
+# this file, 'script.R', and the folders 'data', 'figures', and 'scripts'.
+# You can check the base directory using 
+getwd()
 
-# This paper introduces two function that, given the location of the unzipped HFD and HMD directories,
-# collects and merges data from a range of separate files and places them in a single dataframe. 
-# Doing this means it becomes much easier to work with such data within R and produce a large number 
-# of analyses quickly. 
+# you can set the base directory using (for example):
 
-# Description of HFD and HMD data structures 
-
-# The Human Fertility Database
-# The bulk download option from the HFD downloads a zipped file which has the following 
-# file structure:
-## Illustration here
-
-# The directory has been moved into the subdirectory data/raw_data/hfd within our R 
-# directory. 
-
-# The Human Mortality Database
-# The bulk download option from the HMD downloads a much larger file [DETAILS], which 
-# when unzipped reveals a much more complex directory and file structure. 
-# Each country's data are stored in a separate subdirectory, labelled with the 
-# country code of that country. Within each country directory, the data files
-# tend to have the same name, and so both the directory name and the file 
-# name are needed in order to distinguish between datasets. Not all directories 
-# contain exactly the same files, and the range of years reported in each 
-# year vary. 
-
-# Functions for re-arranging HFD and HMD data. 
-
-# This technical report introduces some functions that automatically combine
-# data from a larger number of separate files from the HMD and HFD into 
-# just two files: an HMD data file and an HFD data file. In both cases, 
-# the functions require that the user has unzipped the HMD and HFD files described 
-# previously. The functions require that the user enter the 'root' directory
-# for the unzipped HFD and HMD directories, but otherwise is automated. It should
-# be noted, however, that the functions require that the structure, format and 
-# contents of the HFD and HMD directories do not change: the functions work with 
-# [VERSION NUMBER OF CURRENT HFD AND HMD]. 
-
-# Loading the functions
-
-# The functions can be loaded using the source command. The functions make use 
-# of a number of data management packages: tidyr, stringr, plyr and dplyr. 
-# If these packages have not already been installed then they will need to be 
-# using the commands install.packages("tidyr"); install.packages("stringr"); 
-# install.packages("plyr"); and install.packages("dplyr").
+#setwd("E:/repos/human_fertility_database/technical_docs/files_to_zip/")
 
 
-source("scripts/tidy_data_functions.r")
-# Use of the HFD database
+#Starting off
 
-# The function hfd_compile compiles four variables from the HFD:
+# To begin, clear the workspace and load the functions in functions.r. 
+# (Note, this file also loads the required packages)
 
-# asfrRR : period fertility rates by calendar year and age (Lexis squares)
-# birthsRR : Live births by calendar year and age (Lexis squares)
-# cpfr: Cumulative period fertility rates (Lexis squares)
-# exposRR : Female population exposure by calendar year and age (Lexis squares)
+rm(list=ls())
+source("scripts/functions.R")
 
-# To use it the base directory, i.e. the directory containing the unzipped HFD database,
-# needs to be specified as the argument to the function
+# To see the functions that have been loaded, use
+ls.str()
 
-hfd_data <- hfd_compile("data/raw_data/hfd")
+# Please ensure the following R functions are listed
+# merge_lexis_square_hfd
+# merge_lexis_square_hmd
 
-write.csv(
-  hfd_data,
-  file="data/tidy/hfd/lexis_square_combined.csv",
-  row.names=F  
-)
-
-# Use of the HMD database
-
-# Like the hfd_compile function, the hmd_compile function simply requires the 
-# base directory for the HMD database be specified as an input. 
-
-hmd_data <- hmd_compile("data/raw_data/hmd")
-
-write.csv(
-  hmd_data,
-  file="data/tidy/hmd/lexis_square_combined.csv",
-  row.names=F
-)
+# generate_scp_asfr
+# generate_scp_population
+# generate_scp_logmort
 
 
 
-# Discussion 
+# Part 1: Creating the derived datasets -------------------------------------------
 
-# This technical document has illustrated how R packages like plyr, tidyr and 
-# dplyr can help with batch data processing operations, extracting relevant data 
-# located in multiple files in multiple locations and joining them into a single 
-# file. With data in the format produced a number of additional analyses become 
-# much more straightforward. A later technical document will illustrate how the 
-# data produced in this technical document can be used to batch generate a large
-# number of data visualisations, as well as other bespoke analyses.
+dta_hfd <- merge_lexis_square_hfd("data/raw_data/hfd/")
+
+dta_hmd <- merge_lexis_square_hmd("data/raw_data/hmd/")
+
+# Save the above using the write.csv function as follows
+
+write.csv(dta_hfd, file="data/derived_data/hfd_lexis_square.csv", row.names=F)
+write.csv(dta_hmd, file="data/derived_data/hmd_lexis_square.csv", row.names=F)
+
+
+# Part 2: Generating outputs based on the derived datasets
+
+# To start with, assume that the derived datasets have been generated in a previous session.
+# To simuate this, first clear all data from the workspace, and load the functions again
+
+rm(list=ls())
+
+source("scripts/functions.R")
+
+dta_hfd <- read.csv("data/derived_data/hfd_lexis_square.csv")
+dta_hmd <- read.csv("data/derived_data/hmd_lexis_square.csv")
+
+
+# The function that generates figures based on the HFD dataset is 
+# generate_scp_asfr.
+# The functions that generate figures based on the HMD dataset are 
+# generate_scp_population and generate_scp_logmort
+
+generate_scp_asfr(dta_hfd)
+generate_scp_population(dta_hmd)
+generate_scp_logmort(dta_hmd)
+
+
+
+#  Part 3: Using the complete HFD and HMD datasets ------------------------
+
+#To make best use of the functions provided please download the full datasets 
+# from the HFD and HMD websites and places them in the data/raw_data/ directories.
+# This will then allow data from a much larger range of countries to be combined 
+# from the HMD, and a much larger range of shaded contour plots to be generated. 
+
+
+# Part 4: Going further ---------------------------------------------------
+
+#Please explore the contents of the functions, paying attention to how they make 
+# use of the plyr and dplyr packages, and how their contents could be used as the blueprint
+# for performing a much wider range of batch merging and batch processing operations 
+# with the data. 
+# Please also visit the website
+# https://github.com/JonMinton/human_fertility_database/ 
+# for additional examples and code, and feel free to contact me 
+# if you have any further questions or suggestions 
+# jonathan.minton@glasgow.ac.uk 
+# nate.minton@gmail.com
 

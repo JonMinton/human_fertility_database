@@ -1,17 +1,20 @@
 
 # HFD and HMD compilation functions
 
-require(tidyr)
-require(stringr)
-require(plyr)
-require(dplyr)
+source("scripts/LoadPackages.R")
+
+RequiredPackages(
+  c(
+    "tidyr", "stringr",
+    "plyr", "dplyr", "lattice"
+    )
+  )
 
 
-hfd_compile <- function(baseloc){
-  
+merge_lexis_square_hfd <- function(loc){
   
   data_asfr <- read.table(
-    file=paste(baseloc, "Files/zip_w/asfrRR.txt", sep="/"),
+    file=paste(loc, "Files/zip_w/asfrRR.txt", sep="/"),
     header=T,
     skip=2,
     na.strings="."
@@ -26,7 +29,7 @@ hfd_compile <- function(baseloc){
   # We can now do the same with the other files
   
   data_births <- read.table(
-    file=paste(baseloc, "Files/zip_w/birthsRR.txt", sep="/"),
+    file=paste(loc, "Files/zip_w/birthsRR.txt", sep="/"),
     header=T,
     skip=2
   )
@@ -36,7 +39,7 @@ hfd_compile <- function(baseloc){
   data_births$age <- as.numeric(as.character(data_births$age))
   
   data_cpfr <- read.table(
-    file=paste(baseloc, "Files/zip_w/cpfrRR.txt", sep="/"),
+    file=paste(loc, "Files/zip_w/cpfrRR.txt", sep="/"),
     header=T,
     skip=2
   )
@@ -46,7 +49,7 @@ hfd_compile <- function(baseloc){
   data_cpfr$age <- as.numeric(as.character(data_cpfr$age))
   
   data_expos <- read.table(
-    file=paste(baseloc, "Files/zip_w/exposRR.txt", sep="/"),
+    file=paste(loc, "Files/zip_w/exposRR.txt", sep="/"),
     header=T,
     skip=2
   )
@@ -73,11 +76,11 @@ hfd_compile <- function(baseloc){
 }
 
 
-hmd_compile <- function(baseloc){
+merge_lexis_square_hmd <- function(loc){
   
   fn <- function(x){
     this_country_name <- x
-    this_basedir <- paste(baseloc, this_country_name, "STATS", sep="/")
+    this_basedir <- paste(loc, this_country_name, "STATS", sep="/")
     
     this_populations <- read.table(
       paste0(this_basedir, "/Population.txt"),
@@ -115,7 +118,7 @@ hmd_compile <- function(baseloc){
     return(output)
   }
   
-  list_country_dirs <- list.dirs(baseloc, recursive=F, full.names=FALSE)
+  list_country_dirs <- list.dirs(loc, recursive=F, full.names=FALSE)
   
   pop_death_combined <- ldply(list_country_dirs, fn, .progress="text")
   
@@ -131,7 +134,195 @@ hmd_compile <- function(baseloc){
     as.character %>%
     as.numeric
   
-  return(pop_death_combined)
+  return(pop_death_combined)  
+}
+
+generate_scp_asfr <- function(
+  dta,
+  outdir="figures/asfr/"
+  ){
+  # For consistency we will  rename 'code' as 'country' in data_hfd,
+  # and coerce all country labels to lowercase
+  
+  dta <- dta  %>% tbl_df %>%
+    rename(country=code)
+  
+  dta$country <- dta$country %>% tolower
+  
+  dir.create(outdir, recursive=T)
+  
+  fn <- function(x){
+    this_country <- x$country[1] # All entries should be the same, but 
+    # the output should only be of length 1. 
+    
+    min_year = min(x$year)
+    max_year = max(x$year)
+    
+    tiff(paste0(
+        outdir, 
+        this_country, 
+        "_asfr(",
+        min_year,
+        "-",
+        max_year,
+        ").tiff"
+      ), width=1000, height=1000)
+    
+
+    
+    title <- paste0(toupper(this_country), ", ASFR\n", min_year, " to ", max_year)
+    
+    x %>%
+      filter(age <=50) %>%
+      contourplot(
+        asfr ~ year * age, 
+        data= .,
+        region=T,
+        col.regions=rev(heat.colors(100)),
+        cuts=20,
+        main=list(label=title, cex=2),
+        xlab=list(cex=2),
+        ylab=list(cex=2),
+        scales=list(cex=2),
+        colorkey=list(labels=list(cex=2)),
+        col="grey",
+        labels=list(col="black", cex=1.5, fontface="bold"),
+        par.strip.text=list(cex=2.5)
+      ) %>%
+      print
+    
+    dev.off()
+    
+    return(NULL)
+  }
+  
+  d_ply(dta, .(country), fn, .progress="text")
+  
+}
+
+
+generate_scp_population <- function(
+  dta,
+  outdir="figures/population/"
+){
+  dta <- dta  %>% tbl_df 
+  
+  dta$country <- dta$country %>% tolower
+  
+  dta <- dta %>%
+    subset(sex!="Total")
+  
+  dir.create(outdir, recursive=T)
+  
+  fn <- function(x){
+    this_country <- x$country[1] # All entries should be the same, but 
+    # the output should only be of length 1. 
+    
+    min_year = min(x$year)
+    max_year = max(x$year)
+    
+    tiff(paste0(
+      outdir, 
+      this_country, 
+      "_population(",
+      min_year,
+      "-",
+      max_year,
+      ").tiff"
+    ), width=2000, height=1000)
+    
+    
+    
+    title <- paste0(toupper(this_country), ", Population Counts\n", min_year, " to ", max_year)
+    
+    x %>%
+      filter(age <=90 & sex !="total") %>%
+      contourplot(
+        population_count ~ year * age | sex, 
+        data= .,
+        region=T,
+        col.regions=rev(heat.colors(100)),
+        cuts=50,
+        main=list(label=title, cex=2),
+        xlab=list(cex=2),
+        ylab=list(cex=2),
+        scales=list(cex=2),
+        colorkey=list(labels=list(cex=2)),
+        col="grey",
+        labels=list(col="black", cex=1.5, fontface="bold"),
+        par.strip.text=list(cex=2.5)
+      ) %>%
+      print
+    
+    dev.off()
+    
+    return(NULL)
+  }
+  
+  d_ply(dta, .(country), fn, .progress="text")
+  
+  
+}
+
+generate_scp_logmort <- function(
+  dta,
+  outdir="figures/logmort/"
+){
+  dta <- dta  %>% tbl_df 
+  
+  dta$country <- dta$country %>% tolower
+  
+  dta <- dta %>%
+    mutate(log_mort = log((death_count+0.5)/(population_count+0.5)))
+  
+  dir.create(outdir, recursive=T)
+  
+  fn <- function(x){
+    this_country <- x$country[1] # All entries should be the same, but 
+    # the output should only be of length 1. 
+    
+    min_year = min(x$year)
+    max_year = max(x$year)
+    
+    tiff(paste0(
+      outdir, 
+      this_country, 
+      "_logmort(",
+      min_year,
+      "-",
+      max_year,
+      ").tiff"
+    ), width=2000, height=1000)
+    
+    
+    
+    title <- paste0(toupper(this_country), ", Log mortality rates\n", min_year, " to ", max_year)
+    
+    x %>%
+      filter(age <=90 & sex !="total") %>%
+      contourplot(
+        log_mort ~ year * age | sex, 
+        data= .,
+        region=T,
+        col.regions=rev(heat.colors(100)),
+        cuts=50,
+        main=list(label=title, cex=2),
+        xlab=list(cex=2),
+        ylab=list(cex=2),
+        scales=list(cex=2),
+        colorkey=list(labels=list(cex=2)),
+        col="grey",
+        labels=list(col="black", cex=1.5, fontface="bold"),
+        par.strip.text=list(cex=2.5)
+      ) %>%
+      print
+    
+    dev.off()
+    
+    return(NULL)
+  }
+  
+  d_ply(dta, .(country), fn, .progress="text")  
   
 }
 
